@@ -1,0 +1,945 @@
+<?php
+require_once 'db_config.php';
+
+$conn = getDBConnection();
+$posts = $conn->query("SELECT p.*, u.username, u.full_name FROM posts p JOIN users u ON p.user_id = u.id ORDER BY p.created_at DESC LIMIT 6");
+$memberCount = $conn->query("SELECT COUNT(*) as cnt FROM users")->fetch_assoc()['cnt'];
+$postCount   = $conn->query("SELECT COUNT(*) as cnt FROM posts")->fetch_assoc()['cnt'];
+$conn->close();
+
+$loggedIn = isset($_SESSION['user_id']);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Hub — Where Neighbors Connect</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --gold: #c9a84c;
+            --gold-light: #e8c97a;
+            --gold-pale: rgba(201,168,76,0.12);
+            --deep: #0a0d12;
+            --surface: #10151c;
+            --card: #151c26;
+            --border: rgba(201,168,76,0.2);
+            --text: #dde3ed;
+            --muted: #7a8799;
+            --white: #ffffff;
+            --accent-blue: #3b82f6;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--deep);
+            color: var(--text);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ─── BACKGROUND ─── */
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse 100% 70% at 50% -10%, rgba(201,168,76,0.09) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 60% at 90% 90%, rgba(59,130,246,0.05) 0%, transparent 50%),
+                radial-gradient(ellipse 50% 50% at 10% 60%, rgba(201,168,76,0.05) 0%, transparent 50%);
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+
+        .bg-noise {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        /* ─── NAV ─── */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 48px;
+            background: rgba(10,13,18,0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .nav-logo span { color: var(--gold); }
+
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--gold); }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 9px 22px;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-ghost:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            border: none;
+            color: #0a0d12;
+        }
+
+        .btn-gold:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(201,168,76,0.35);
+        }
+
+        /* ─── HERO ─── */
+        .hero {
+            position: relative;
+            z-index: 1;
+            min-height: 92vh;
+            display: flex;
+            align-items: center;
+            padding: 80px 48px;
+            overflow: hidden;
+        }
+
+        .hero-image-bg {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(to right, rgba(10,13,18,0.97) 40%, rgba(10,13,18,0.6) 70%, rgba(10,13,18,0.3) 100%),
+                url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1400&q=80');
+            background-size: cover;
+            background-position: center;
+            z-index: -1;
+        }
+
+        .hero-content {
+            max-width: 640px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--gold-pale);
+            border: 1px solid var(--border);
+            color: var(--gold);
+            padding: 6px 16px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 28px;
+            animation: fadeInUp 0.6s ease both;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--gold);
+            border-radius: 50%;
+            animation: pulse 2s ease infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2.8rem, 6vw, 5rem);
+            font-weight: 900;
+            line-height: 1.08;
+            color: var(--white);
+            margin-bottom: 24px;
+            animation: fadeInUp 0.7s 0.1s ease both;
+        }
+
+        .hero h1 em {
+            font-style: italic;
+            color: var(--gold);
+        }
+
+        .hero p {
+            font-size: 1.15rem;
+            color: var(--muted);
+            line-height: 1.8;
+            margin-bottom: 36px;
+            max-width: 520px;
+            animation: fadeInUp 0.7s 0.2s ease both;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 14px;
+            animation: fadeInUp 0.7s 0.3s ease both;
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-item {
+            flex: 1;
+            max-width: 200px;
+            text-align: center;
+            padding: 28px 20px;
+            border-right: 1px solid var(--border);
+        }
+
+        .stat-item:last-child { border-right: none; }
+
+        .stat-num {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--gold);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.82rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* ─── SECTIONS ─── */
+        section { position: relative; z-index: 1; }
+
+        .section-header {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto 56px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--gold);
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+            color: var(--white);
+            line-height: 1.2;
+            margin-bottom: 14px;
+        }
+
+        .section-sub {
+            color: var(--muted);
+            font-size: 1rem;
+        }
+
+        /* ─── ABOUT SECTION ─── */
+        .about {
+            padding: 100px 48px;
+        }
+
+        .about-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: center;
+        }
+
+        .about-image-wrap {
+            position: relative;
+        }
+
+        .about-img {
+            width: 100%;
+            height: 460px;
+            object-fit: cover;
+            border-radius: 20px;
+            display: block;
+        }
+
+        .about-img-overlay {
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(201,168,76,0.15) 0%, transparent 60%);
+            border: 1px solid var(--border);
+        }
+
+        .about-accent {
+            position: absolute;
+            bottom: -20px;
+            right: -20px;
+            width: 160px;
+            height: 160px;
+            background: var(--gold-pale);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            backdrop-filter: blur(12px);
+        }
+
+        .about-accent strong {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.4rem;
+            color: var(--gold);
+            line-height: 1;
+        }
+
+        .about-accent span {
+            font-size: 0.78rem;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .about-text h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.4rem;
+            color: var(--white);
+            line-height: 1.2;
+            margin-bottom: 20px;
+        }
+
+        .about-text p {
+            color: var(--muted);
+            margin-bottom: 18px;
+            font-size: 0.98rem;
+        }
+
+        .about-list {
+            list-style: none;
+            margin-top: 24px;
+        }
+
+        .about-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .about-list li::before {
+            content: '✦';
+            color: var(--gold);
+            font-size: 0.8rem;
+            margin-top: 3px;
+            flex-shrink: 0;
+        }
+
+        /* ─── GALLERY ─── */
+        .gallery {
+            padding: 80px 48px;
+            background: var(--surface);
+        }
+
+        .gallery-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            cursor: pointer;
+        }
+
+        .gallery-item:first-child {
+            grid-column: span 2;
+            aspect-ratio: 16/9;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .gallery-item:hover img { transform: scale(1.06); }
+
+        .gallery-item::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(10,13,18,0.6) 0%, transparent 50%);
+        }
+
+        .gallery-caption {
+            position: absolute;
+            bottom: 14px;
+            left: 14px;
+            z-index: 1;
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+        }
+
+        /* ─── POSTS SECTION ─── */
+        .posts-section {
+            padding: 100px 48px;
+        }
+
+        .posts-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .post-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .post-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .post-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+            border-color: rgba(201,168,76,0.4);
+        }
+
+        .post-card:hover::before { opacity: 1; }
+
+        .post-category {
+            display: inline-block;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            color: var(--gold);
+            background: var(--gold-pale);
+            padding: 3px 10px;
+            border-radius: 100px;
+            margin-bottom: 14px;
+        }
+
+        .post-card h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            color: var(--white);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .post-card p {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.7;
+            margin-bottom: 18px;
+        }
+
+        .post-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .avatar-sm {
+            width: 28px; height: 28px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--deep);
+        }
+
+        /* ─── VALUES ─── */
+        .values {
+            padding: 80px 48px;
+            background: var(--surface);
+        }
+
+        .values-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .value-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: border-color 0.2s;
+        }
+
+        .value-card:hover { border-color: var(--gold); }
+
+        .value-icon {
+            font-size: 2.4rem;
+            margin-bottom: 16px;
+        }
+
+        .value-card h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.3rem;
+            color: var(--white);
+            margin-bottom: 10px;
+        }
+
+        .value-card p {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+
+        /* ─── CTA ─── */
+        .cta {
+            padding: 100px 48px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 80% at 50% 50%, rgba(201,168,76,0.08) 0%, transparent 70%);
+        }
+
+        .cta-inner { position: relative; z-index: 1; }
+
+        .cta h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            color: var(--white);
+            max-width: 600px;
+            margin: 0 auto 20px;
+        }
+
+        .cta p {
+            color: var(--muted);
+            font-size: 1.05rem;
+            max-width: 500px;
+            margin: 0 auto 36px;
+        }
+
+        /* ─── FOOTER ─── */
+        footer {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 48px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 48px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer-brand p {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-top: 12px;
+            max-width: 300px;
+            line-height: 1.7;
+        }
+
+        .footer-col h4 {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        .footer-col a {
+            display: block;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            transition: color 0.2s;
+        }
+
+        .footer-col a:hover { color: var(--gold); }
+
+        .footer-bottom {
+            background: var(--surface);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 20px 48px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.82rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            nav { padding: 14px 20px; }
+            .nav-links { display: none; }
+            .hero, .about, .posts-section, .gallery, .values, .cta { padding: 60px 20px; }
+            .about-inner { grid-template-columns: 1fr; }
+            .gallery-grid { grid-template-columns: 1fr 1fr; }
+            .gallery-item:first-child { grid-column: span 2; }
+            .values-grid { grid-template-columns: 1fr; }
+            footer { grid-template-columns: 1fr; padding: 32px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="bg-grid"></div>
+<div class="bg-noise"></div>
+
+<!-- NAV -->
+<nav>
+    <a href="index.php" class="nav-logo">
+        <div class="logo-icon">🏘️</div>
+        Community<span>Hub</span>
+    </a>
+    <ul class="nav-links">
+        <li><a href="#about">About</a></li>
+        <li><a href="#gallery">Gallery</a></li>
+        <li><a href="#posts">Latest Posts</a></li>
+        <li><a href="#values">Values</a></li>
+    </ul>
+    <div class="nav-actions">
+        <?php if ($loggedIn): ?>
+            <a href="dashboard.php" class="btn btn-ghost">👋 <?= htmlspecialchars($_SESSION['username']) ?></a>
+            <a href="logout.php" class="btn btn-gold">Sign Out</a>
+        <?php else: ?>
+            <a href="login.php" class="btn btn-ghost">Sign In</a>
+            <a href="login.php" class="btn btn-gold">Join Free</a>
+        <?php endif; ?>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-image-bg"></div>
+    <div class="hero-content">
+        <div class="hero-badge">Now Open to New Members</div>
+        <h1>Where <em>Neighbors</em><br>Become Community</h1>
+        <p>A vibrant gathering place for real people to share stories, celebrate milestones, organize events, and build something meaningful together — right where you live.</p>
+        <div class="hero-actions">
+            <?php if ($loggedIn): ?>
+                <a href="dashboard.php" class="btn btn-gold">Go to Dashboard →</a>
+            <?php else: ?>
+                <a href="login.php" class="btn btn-gold">Join Our Community →</a>
+                <a href="#about" class="btn btn-ghost">Learn More</a>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar">
+    <div class="stat-item">
+        <span class="stat-num"><?= $memberCount ?>+</span>
+        <span class="stat-label">Active Members</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-num"><?= $postCount ?>+</span>
+        <span class="stat-label">Community Posts</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-num">12+</span>
+        <span class="stat-label">Monthly Events</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-num">5★</span>
+        <span class="stat-label">Community Rating</span>
+    </div>
+</div>
+
+<!-- ABOUT -->
+<section class="about" id="about">
+    <div class="about-inner">
+        <div class="about-image-wrap">
+            <img
+                src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=700&q=80"
+                alt="Community members gathered together"
+                class="about-img"
+            >
+            <div class="about-img-overlay"></div>
+            <div class="about-accent">
+                <strong>2019</strong>
+                <span>Founded with<br>purpose</span>
+            </div>
+        </div>
+        <div class="about-text">
+            <div class="section-tag">Our Story</div>
+            <h2>More Than a Place —<br>A Shared Identity</h2>
+            <p>Community Hub was born from a simple belief: that the best things in life happen when people show up for each other. We started as a small neighborhood group and grew into a thriving network of caring, curious, and committed people.</p>
+            <p>From weekly farmers markets to volunteer clean-up drives, from helping a new family settle in to celebrating a longtime resident's milestone — we are the fabric of this neighborhood, woven thread by thread, story by story.</p>
+            <p>Our doors — both physical and digital — are always open. Whether you have lived here all your life or just moved in last week, this is your community too.</p>
+            <ul class="about-list">
+                <li>Volunteer-powered, community-owned initiatives</li>
+                <li>Safe, respectful, and inclusive for everyone</li>
+                <li>Monthly events, workshops, and meetups</li>
+                <li>24/7 online space to connect and share</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- GALLERY -->
+<section class="gallery" id="gallery">
+    <div class="section-header">
+        <div class="section-tag">Our Moments</div>
+        <h2 class="section-title">Life in the Community</h2>
+        <p class="section-sub">Real moments from real people — the joy, the connections, and the everyday magic that make this place home.</p>
+    </div>
+    <div class="gallery-grid">
+        <div class="gallery-item">
+            <img src="https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=900&q=80" alt="Community event">
+            <div class="gallery-caption">Annual Community Festival</div>
+        </div>
+        <div class="gallery-item">
+            <img src="https://images.unsplash.com/photo-1526976668912-1a811878dd37?w=500&q=80" alt="Volunteer day">
+            <div class="gallery-caption">Volunteer Garden Day</div>
+        </div>
+        <div class="gallery-item">
+            <img src="https://images.unsplash.com/photo-1543269865-cbf427effbad?w=500&q=80" alt="Kids program">
+            <div class="gallery-caption">Youth Programs</div>
+        </div>
+        <div class="gallery-item">
+            <img src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?w=500&q=80" alt="Workshop">
+            <div class="gallery-caption">Skills Workshops</div>
+        </div>
+        <div class="gallery-item">
+            <img src="https://images.unsplash.com/photo-1491438590914-bc09fcaaf77a?w=500&q=80" alt="Neighbors">
+            <div class="gallery-caption">Neighbor Meetups</div>
+        </div>
+    </div>
+</section>
+
+<!-- POSTS -->
+<section class="posts-section" id="posts">
+    <div class="section-header">
+        <div class="section-tag">Community Board</div>
+        <h2 class="section-title">Latest from the Neighborhood</h2>
+        <p class="section-sub">Stay in the loop with the latest announcements, stories, and happenings from your neighbors.</p>
+    </div>
+    <div class="posts-grid">
+        <?php if ($posts && $posts->num_rows > 0): ?>
+            <?php while ($post = $posts->fetch_assoc()): ?>
+            <div class="post-card">
+                <div class="post-category"><?= htmlspecialchars($post['category'] ?? 'General') ?></div>
+                <h3><?= htmlspecialchars($post['title']) ?></h3>
+                <p><?= htmlspecialchars(substr($post['content'], 0, 140)) ?>...</p>
+                <div class="post-meta">
+                    <div class="avatar-sm"><?= strtoupper(substr($post['full_name'] ?? $post['username'], 0, 1)) ?></div>
+                    <span><?= htmlspecialchars($post['full_name'] ?? $post['username']) ?></span>
+                    <span>·</span>
+                    <span><?= date('M j', strtotime($post['created_at'])) ?></span>
+                </div>
+            </div>
+            <?php endwhile; ?>
+        <?php else: ?>
+            <div class="post-card" style="grid-column: 1/-1; text-align:center; padding: 60px;">
+                <p style="color: var(--muted); font-size: 1.1rem;">No posts yet. Be the first to share something! <a href="login.php" style="color: var(--gold);">Sign in →</a></p>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- VALUES -->
+<section class="values" id="values">
+    <div class="section-header">
+        <div class="section-tag">What We Stand For</div>
+        <h2 class="section-title">Our Community Values</h2>
+        <p class="section-sub">Three pillars that guide everything we do and every decision we make together.</p>
+    </div>
+    <div class="values-grid">
+        <div class="value-card">
+            <div class="value-icon">🤝</div>
+            <h3>Belonging</h3>
+            <p>Everyone deserves to feel at home. We actively create spaces — physical and digital — where all voices are heard, respected, and celebrated. No one is a stranger here for long.</p>
+        </div>
+        <div class="value-card">
+            <div class="value-icon">🌱</div>
+            <h3>Growth</h3>
+            <p>We believe communities grow stronger when individuals grow too. We support learning, entrepreneurship, mentorship, and the kind of personal development that lifts everyone around you.</p>
+        </div>
+        <div class="value-card">
+            <div class="value-icon">💡</div>
+            <h3>Action</h3>
+            <p>Ideas matter — but action changes lives. We move quickly from conversation to commitment, turning neighborhood dreams into real, tangible improvements for everyone who calls this place home.</p>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+    <div class="cta-inner">
+        <div class="section-tag">Ready to Belong?</div>
+        <h2>Your Community is Waiting for You</h2>
+        <p>Join hundreds of neighbors who have already found their place in our growing, caring, and active community. It takes 30 seconds to sign up.</p>
+        <?php if (!$loggedIn): ?>
+            <a href="login.php" class="btn btn-gold" style="font-size:1rem; padding: 14px 36px;">Create Free Account →</a>
+        <?php else: ?>
+            <a href="dashboard.php" class="btn btn-gold" style="font-size:1rem; padding: 14px 36px;">Go to Your Dashboard →</a>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+    <div class="footer-brand">
+        <a href="index.php" class="nav-logo" style="font-size:1.2rem;">
+            <div class="logo-icon" style="width:32px;height:32px;font-size:16px;">🏘️</div>
+            Community<span>Hub</span>
+        </a>
+        <p>A warm, welcoming space for neighbors to connect, share, and build something meaningful together. This is more than a website — it's home.</p>
+    </div>
+    <div class="footer-col">
+        <h4>Explore</h4>
+        <a href="#about">About Us</a>
+        <a href="#gallery">Gallery</a>
+        <a href="#posts">Community Posts</a>
+        <a href="#values">Our Values</a>
+    </div>
+    <div class="footer-col">
+        <h4>Account</h4>
+        <a href="login.php">Sign In</a>
+        <a href="login.php">Create Account</a>
+        <?php if ($loggedIn): ?>
+            <a href="dashboard.php">Dashboard</a>
+            <a href="logout.php">Logout</a>
+        <?php endif; ?>
+    </div>
+</footer>
+<div class="footer-bottom">
+    © <?= date('Y') ?> CommunityHub. Built with care for our neighbors. Running on XAMPP + PHP + MySQL.
+</div>
+
+</body>
+</html>
